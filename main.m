@@ -271,7 +271,7 @@ clear; clc; close all;
 %% --- Load dataset -------------------------------------------------------
 fprintf('[INFO] Loading dataset...\n');
 data = load_data();
-visualize_landmarks( data);
+% visualize_landmarks( data);
 
 %% --- Triangulate initial 3D landmarks -----------------------------------
 landmark_ids = sort(cell2mat(keys(data.measurements)));
@@ -279,6 +279,7 @@ selected_ids = landmark_ids;  % or use landmark_ids(1:5) for subset
 
 [landmarks_init, id_map] = triangulate_simple(data, selected_ids);
 % [landmarks_init] = triangulate_all(data);
+% [landmarks_init] = triangulate_best_pair(data);
  
 fprintf('[PLOT] Visualizing triangulated landmarks vs ground truth...\n');
 visualize_landmarks( data, landmarks_init);
@@ -287,9 +288,9 @@ visualize_landmarks( data, landmarks_init);
 % === Evaluate triangulated landmark reprojection ===
 fprintf("\n[INFO] Evaluating triangulated landmark reprojection...\n");
 
-rmse = evaluate_map(landmarks_init, data)
-fprintf("\n[INFO] RMSE of triangulated landmarks: %.4f\n", rmse);
-pause;
+evaluate_map(landmarks_init, data);
+
+% pause;
 num_landmarks = length(landmarks_init);
 XR_guess = zeros(4,4,size(data.trajectory,1));
 for i = 1:size(data.trajectory,1)
@@ -431,10 +432,10 @@ end
 %% --- Bundle Adjustment --------------------------------------------------
 fprintf('[INFO] Running Bundle Adjustment...\n');
 damping = 1e-4;
-kernel_threshold_proj = 5000
-kernel_threshold_pose = 0.01
+kernel_threshold_proj = 5000;
+kernel_threshold_pose = 0.01;
 kernel_threshold = 0.01;
-num_iterations = 25;
+num_iterations = 5;
 
 % Zp = double(Zp);
 % projection_associations = double(projection_associations);
@@ -443,15 +444,7 @@ num_iterations = 25;
 
 assert(all(pose_associations(:) >= 1), 'pose_associations contains zero or negative indices');
 
-
-% [XR, XL, chi_stats_p, num_inliers_p, chi_stats_r, num_inliers_r, H, b, iteration] = ...
-%     doTotalLS(XR_guess, XL_guess, ...
-%               Zp, projection_associations, ...
-%               Zr, pose_associations, ...
-%               num_poses, num_landmarks, ...
-%               num_iterations, damping, kernel_threshold_proj, kernel_threshold_pose);
-
-
+plotting = false ;
 [XR, XL, chi_stats_l, num_inliers_l, ...
           chi_stats_p, num_inliers_p, ...
           chi_stats_r, num_inliers_r, ...
@@ -463,14 +456,13 @@ assert(all(pose_associations(:) >= 1), 'pose_associations contains zero or negat
                             num_landmarks, ...
                             num_iterations, ...
                             damping, ...
-                            kernel_threshold)
+                            kernel_threshold, ...
+                            plotting,...
+                            data);
 
+ 
 
-pause;
-
-
-
-%% --- Display Results --------------------------------------------------
+% --- Display Full Results --------------------------------------------------
 % === Recompute estimated trajectory from XR ===
 traj_estimated = zeros(3, num_poses);
 for i = 1:num_poses

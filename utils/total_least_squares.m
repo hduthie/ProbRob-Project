@@ -47,11 +47,51 @@ function [XR, XL, chi_stats_l, num_inliers_l, ...
                             num_landmarks, ...
                             num_iterations, ...
                             damping, ...
-                            kernel_threshold)
+                            kernel_threshold, ...
+                            plotting, ...
+                            data)
+  % doTotalLS - Performs Bundle Adjustment using Total Least Squares
+  %
+  % This function jointly optimizes camera poses (XR) and 3D landmark positions (XL)
+  % by minimizing reprojection and pose graph errors using iterative least squares.
+  %
+  % Inputs:
+  %   XR                - Initial robot poses [4x4xnum_poses]
+  %   XL                - Initial landmark estimates [3xnum_landmarks]
+  %   Zl                - Landmark observations (not used in projection-only BA) [3xN]
+  %   landmark_associations - 2xN matrix: [pose_idx; landmark_idx] for Zl (can be empty)
+  %   Zp                - Image plane measurements [2xM]
+  %   projection_associations - 2xM matrix: [pose_idx; landmark_idx]
+  %   Zr                - Relative pose measurements [4x4x(num_poses-1)]
+  %   pose_associations - 2x(num_poses-1) matrix: [i; j] means relative transform from pose i to pose j
+  %   num_poses         - Total number of robot poses
+  %   num_landmarks     - Total number of landmarks
+  %   num_iterations    - Maximum number of optimization iterations
+  %   damping           - Scalar damping value (Tikhonov regularization)
+  %   kernel_threshold  - Threshold for robust kernel (Huber-style)
+  %   plotting          - Boolean flag: if true, visualizes map and trajectory every 3 iterations
+  %   data              - Struct containing .world (GT landmarks) and .trajectory (GT and odom poses)
+  %
+  % Outputs:
+  %   XR                - Optimized robot poses [4x4xnum_poses]
+  %   XL                - Optimized landmark estimates [3xnum_landmarks]
+  %   chi_stats_l       - Landmark term chi² over iterations
+  %   num_inliers_l     - Inliers for landmark measurements per iteration
+  %   chi_stats_p       - Projection term chi² over iterations
+  %   num_inliers_p     - Inliers for projection measurements per iteration
+  %   chi_stats_r       - Pose graph term chi² over iterations
+  %   num_inliers_r     - Inliers for pose graph edges per iteration
+  %   H, b              - Final system matrix and vector (for debugging or analysis)
+  %
+  % Notes:
+  % - The first pose is fixed to eliminate gauge freedom.
+  % - Projection plots are shown every 3 iterations if `plotting` is true.
+  % - This version assumes planar SE(2) motion encoded in SE(3).
+                     
 
   global pose_dim;
   global landmark_dim;
-  global data;
+
 
   chi_stats_l = zeros(1, num_iterations);
   num_inliers_l = zeros(1, num_iterations);
@@ -86,8 +126,9 @@ function [XR, XL, chi_stats_l, num_inliers_l, ...
       b += b_landmarks + b_proj;
     end
 
+  
     [H_poses, b_poses, chi_r, inliers_r] = ...
-      linearizePoses(XR, XL, Zr, pose_associations, ...
+      linearizePoses(XR, Zr, pose_associations, ...
                      num_poses, num_landmarks, kernel_threshold);
     chi_stats_r(iteration) = chi_r;
     num_inliers_r(iteration) = inliers_r;
@@ -114,8 +155,8 @@ function [XR, XL, chi_stats_l, num_inliers_l, ...
       break;
     end
 
-    % --- Plot trajectory and landmarks every 3 iterations ---
-    if mod(iteration, 3) == 0 || iteration == num_iterations
+    % --- Plot trajectory and landmarks every 3 iterations if plot true---
+    if mod(iteration, 3) == 0 || iteration == num_iterations && plotting
       figure('Name', sprintf('SLAM View - Iteration %d', iteration), 'NumberTitle', 'off');
       hold on; grid on; axis equal;
       title(sprintf('Estimated vs Ground Truth - Iteration %d', iteration));
@@ -141,19 +182,19 @@ function [XR, XL, chi_stats_l, num_inliers_l, ...
     end
   end
 
-  % --- Final chi squared plots ---
-  figure('Name', 'BA Optimization Stats', 'NumberTitle', 'off');
-  set(gcf, 'Position', [100, 100, 1000, 400]);
+  % % --- Final chi squared plots ---
+  % figure('Name', 'BA Optimization Stats', 'NumberTitle', 'off');
+  % set(gcf, 'Position', [100, 100, 1000, 400]);
 
-  subplot(1,2,1); hold on; grid on;
-  plot(chi_stats_l + chi_stats_p + chi_stats_r, 'b-', 'LineWidth', 2, 'DisplayName', 'Total χ²');
-  plot(chi_stats_r, 'r--', 'LineWidth', 1.5, 'DisplayName', 'Pose χ²');
-  plot(chi_stats_p, 'g:', 'LineWidth', 1.5, 'DisplayName', 'Proj. χ²');
-  title('χ² over Iterations'); xlabel('Iteration'); ylabel('χ²'); legend('show');
+  % subplot(1,2,1); hold on; grid on;
+  % plot(chi_stats_l + chi_stats_p + chi_stats_r, 'b-', 'LineWidth', 2, 'DisplayName', 'Total χ²');
+  % plot(chi_stats_r, 'r--', 'LineWidth', 1.5, 'DisplayName', 'Pose χ²');
+  % plot(chi_stats_p, 'g:', 'LineWidth', 1.5, 'DisplayName', 'Proj. χ²');
+  % title('χ² over Iterations'); xlabel('Iteration'); ylabel('χ²'); legend('show');
 
-  subplot(1,2,2); hold on; grid on;
-  plot(dx_norm, 'm-', 'LineWidth', 2);
-  title('Step Norm ‖dx‖ over Iterations'); xlabel('Iteration'); ylabel('‖dx‖');
+  % subplot(1,2,2); hold on; grid on;
+  % plot(dx_norm, 'm-', 'LineWidth', 2);
+  % title('Step Norm ‖dx‖ over Iterations'); xlabel('Iteration'); ylabel('‖dx‖');
 endfunction
 
 % function [XR, XL, chi_stats_p, num_inliers_p, chi_stats_r, num_inliers_r, H, b, iteration] = ...
