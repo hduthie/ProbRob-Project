@@ -16,6 +16,7 @@ This project implements a full SLAM pipeline using only a monocular camera and o
 Run the main entry point:
 ```bash
 octave main.m
+```
 
 ## Note
 This is an attempt at implementing Planar Monocular SLAM from scratch which is currently **not successful**:
