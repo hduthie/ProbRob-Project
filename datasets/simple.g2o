@@ -1,0 +1,20 @@
+# Landmarks (VERTEX_XY: ID x y)
+VERTEX_XY 0 2.0 1.0    # First landmark 
+VERTEX_XY 1 -1.0 2.0   # Second landmark 
+
+# Robot poses (VERTEX_SE2: ID x y theta)
+VERTEX_SE2 2 0.0 0.0 0.0        # Initial pose: at origin, facing right
+VERTEX_SE2 3 1.0 0.0 0.785      # Second pose: moved right and rotating 45 degrees
+VERTEX_SE2 4 1.5 1.0 1.57       # Third pose: moved up and rotating to face up
+
+# Odometry constraints between poses (EDGE_SE2: ID_from ID_to dx dy dtheta)
+EDGE_SE2 2 3 1.0 0.0 0.785      # Movement from pose 2 to 3
+EDGE_SE2 3 4 0.5 1.0 0.785      # Movement from pose 3 to 4
+
+# Observations (EDGE_BEARING_SE2_XY: robot_pose_id landmark_id bearing)
+EDGE_BEARING_SE2_XY 2 0 0.927295218    # Initial pose observes landmark 0
+EDGE_BEARING_SE2_XY 2 1 2.034443936    # Initial pose observes landmark 1
+EDGE_BEARING_SE2_XY 3 0 0.463647609    # Second pose observes landmark 0
+EDGE_BEARING_SE2_XY 3 1 1.570796327    # Second pose observes landmark 1
+EDGE_BEARING_SE2_XY 4 0 0.0            # Third pose observes landmark 0
+EDGE_BEARING_SE2_XY 4 1 0.785398163    # Third pose observes landmark 1
