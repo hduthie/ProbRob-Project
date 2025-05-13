@@ -1,5 +1,5 @@
-source "utils_final/geometry_helpers_3d.m"
-source "utils_final/total_least_squares_indices.m"
+source "utils/geometry_helpers_3d.m"
+source "utils/total_least_squares_indices.m"
 
 # error and jacobian of a measured pose, all poses are in world frame
 # input:

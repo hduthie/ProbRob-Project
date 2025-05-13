@@ -4,8 +4,8 @@
 % % This script loads the dataset, triangulates 3D landmarks using noisy
 % % odometry and 2D image measurements, and prepares for bundle adjustment.
 % % =========================================================================
-% addpath('utils_final');  % Add utils folder to path for helper functions
-% source "utils_final/total_least_squares.m"
+% addpath('utils');  % Add utils folder to path for helper functions
+% source "utils/total_least_squares.m"
 % clear; clc; close all;
 
 % %% --- Load dataset -------------------------------------------------------
@@ -264,28 +264,32 @@
 % MAIN.M - Planar Monocular SLAM 
 % =========================================================================
 
-addpath('utils_final');
-source "utils_final/total_least_squares.m"
+addpath('utils');
+source "utils/total_least_squares.m"
 clear; clc; close all;
 
 %% --- Load dataset -------------------------------------------------------
 fprintf('[INFO] Loading dataset...\n');
 data = load_data();
+visualize_landmarks( data);
 
 %% --- Triangulate initial 3D landmarks -----------------------------------
 landmark_ids = sort(cell2mat(keys(data.measurements)));
 selected_ids = landmark_ids;  % or use landmark_ids(1:5) for subset
-% [landmarks_init, id_map] = triangulate_simple(data, selected_ids);
-[landmarks_init] = triangulate_all(data);
+
+[landmarks_init, id_map] = triangulate_simple(data, selected_ids);
+% [landmarks_init] = triangulate_all(data);
  
 fprintf('[PLOT] Visualizing triangulated landmarks vs ground truth...\n');
-visualize_landmarks(landmarks_init, data);
-
+visualize_landmarks( data, landmarks_init);
 
 
 % === Evaluate triangulated landmark reprojection ===
 fprintf("\n[INFO] Evaluating triangulated landmark reprojection...\n");
 
+rmse = evaluate_map(landmarks_init, data)
+fprintf("\n[INFO] RMSE of triangulated landmarks: %.4f\n", rmse);
+pause;
 num_landmarks = length(landmarks_init);
 XR_guess = zeros(4,4,size(data.trajectory,1));
 for i = 1:size(data.trajectory,1)
@@ -300,7 +304,7 @@ for lm_idx = 1:num_landmarks
     obs = data.measurements(lm.id);  % [pose_idx, u, v]
 
     for j = 1:size(obs, 1)
-        pose_idx = obs(j,1) + 1;  % convert to 1-based
+        pose_idx = obs(j,1) + 1;  % convert to 1-based indexing
         z_measured = obs(j,2:3)';
         Xr = XR_guess(:,:,pose_idx);
         z_proj = projectPoint(Xr, lm.pos);
@@ -324,21 +328,18 @@ for i = 1:num_landmarks
 end
 fprintf("\n[INFO] Done evaluating triangulated landmarks.\n");
 
-pause;
+% pause;
 
 % Visualize reprojection of landmark 86 from pose 10
 % visualize_reprojection(XR_guess, XL_guess, Zp, projection_associations, 86, 10)
 % pause;
 
 
-
-
-
-
 %% --- Prepare for Bundle Adjustment -------------------------------------
 fprintf('[INFO] Preparing for Bundle Adjustment...\n');
 
 % 1. Convert odometry to SE(3) pose guesses
+fprintf('[INFO] Converting odometry to SE(3) pose guesses...\n');
 num_poses = size(data.trajectory, 1);
 XR_guess = zeros(4,4,num_poses);
 for i = 1:num_poses
@@ -346,6 +347,7 @@ for i = 1:num_poses
 end
 
 % 2. Build XL_guess and id_map (landmark_id -> column index)
+fprintf('[INFO] Building XL_guess and id_map...\n');
 XL_guess = zeros(3, length(landmarks_init));
 id_map = containers.Map('KeyType', 'int32', 'ValueType', 'int32');
 for i = 1:length(landmarks_init)
@@ -355,6 +357,7 @@ end
 num_landmarks = size(XL_guess, 2);
 
 % 3. Build Zp and projection_associations
+fprintf('[INFO] Building Zp and projection_associations...\n');
 Zp = [];
 projection_associations = [];
 
@@ -375,6 +378,7 @@ end
 
 
 % 4. Build odometry edge constraints
+fprintf('[INFO] Building odometry edge constraints...\n');
 Zr = zeros(4,4,num_poses-1);
 pose_associations = zeros(2, num_poses-1);
 for i = 1:(num_poses-1)
@@ -385,10 +389,12 @@ for i = 1:(num_poses-1)
 end
 
 % 5. No local measurements (Zl)
+fprintf('[INFO] No local measurements (Zl)...\n');
 Zl = zeros(3,0);
 landmark_associations = zeros(2,0);
 
 % Compute reprojection error per landmark before BA
+fprintf("\n[INFO] Computing reprojection error per landmark...\n");
 num_landmarks = size(XL_guess, 2);
 errors_per_landmark = cell(1, num_landmarks);
 
@@ -406,29 +412,29 @@ for k = 1:size(Zp, 2)
     end
 end
 
+% Filter by reprojection error?
 % Print average reprojection error for each landmark
-fprintf("\nAverage reprojection error per landmark:\n");
-for i = 1:num_landmarks
-    errs = errors_per_landmark{i};
-    if ~isempty(errs)
-        avg_err = mean(errs);
-        fprintf("Landmark %d: %.2f pixels (from %d obs)\n", i, avg_err, length(errs));
-    else
-        fprintf("Landmark %d: no valid projections\n", i);
-    end
-end
+% fprintf("\nAverage reprojection error per landmark:\n");
+% for i = 1:num_landmarks
+%     errs = errors_per_landmark{i};
+%     if ~isempty(errs)
+%         avg_err = mean(errs);
+%         fprintf("Landmark %d: %.2f pixels (from %d obs)\n", i, avg_err, length(errs));
+%     else
+%         fprintf("Landmark %d: no valid projections\n", i);
+%     end
+% end
+% pause;
 
 
-
-pause;
-% Also filter projection_associations and Zp to keep only valid landmarks
 
 %% --- Bundle Adjustment --------------------------------------------------
 fprintf('[INFO] Running Bundle Adjustment...\n');
-damping = 0;
+damping = 1e-4;
 kernel_threshold_proj = 5000
 kernel_threshold_pose = 0.01
-num_iterations = 3;
+kernel_threshold = 0.01;
+num_iterations = 25;
 
 % Zp = double(Zp);
 % projection_associations = double(projection_associations);
@@ -438,15 +444,33 @@ num_iterations = 3;
 assert(all(pose_associations(:) >= 1), 'pose_associations contains zero or negative indices');
 
 
+% [XR, XL, chi_stats_p, num_inliers_p, chi_stats_r, num_inliers_r, H, b, iteration] = ...
+%     doTotalLS(XR_guess, XL_guess, ...
+%               Zp, projection_associations, ...
+%               Zr, pose_associations, ...
+%               num_poses, num_landmarks, ...
+%               num_iterations, damping, kernel_threshold_proj, kernel_threshold_pose);
 
-[XR, XL, chi_stats_p, num_inliers_p, chi_stats_r, num_inliers_r, H, b, iteration] = ...
-    doTotalLS(XR_guess, XL_guess, ...
-              Zp, projection_associations, ...
-              Zr, pose_associations, ...
-              num_poses, num_landmarks, ...
-              num_iterations, damping, kernel_threshold_proj, kernel_threshold_pose);
+
+[XR, XL, chi_stats_l, num_inliers_l, ...
+          chi_stats_p, num_inliers_p, ...
+          chi_stats_r, num_inliers_r, ...
+          H, b] = doTotalLS(XR_guess, XL_guess, ...
+                            Zl, landmark_associations, ...
+                            Zp, projection_associations, ...
+                            Zr, pose_associations, ...
+                            num_poses, ...
+                            num_landmarks, ...
+                            num_iterations, ...
+                            damping, ...
+                            kernel_threshold)
 
 
+pause;
+
+
+
+%% --- Display Results --------------------------------------------------
 % === Recompute estimated trajectory from XR ===
 traj_estimated = zeros(3, num_poses);
 for i = 1:num_poses
@@ -465,7 +489,6 @@ XL_triang = zeros(3, length(landmarks_init));
 for i = 1:length(landmarks_init)
     XL_triang(:, i) = landmarks_init(i).pos;
 end
-
 
 
 % === Recompute estimated trajectory ===
