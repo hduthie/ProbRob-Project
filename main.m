@@ -4,265 +4,6 @@
 % % This script loads the dataset, triangulates 3D landmarks using noisy
 % % odometry and 2D image measurements, and prepares for bundle adjustment.
 % % =========================================================================
-% addpath('utils');  % Add utils folder to path for helper functions
-% source "utils/total_least_squares.m"
-% clear; clc; close all;
-
-% %% --- Load dataset -------------------------------------------------------
-% fprintf('[INFO] Loading dataset...\n');
-% [data] = load_data();  % You'll implement this next
-
-% % data.camera          = struct with intrinsics and extrinsics
-% % data.trajectory      = [N x 7] matrix: [pose_id, odom(1:3), gt(1:3)]
-% % data.measurements    = cell array where each cell = [pt_id, true_id, u, v]
-% % data.world           = [N_landmarks x 4]: [id, x, y, z]
-
-% %% --- Triangulate initial 3D landmarks -----------------------------------
-% % fprintf('[INFO] Triangulating initial 3D points...\n');
-% % [landmarks_init] = triangulate_all(data);
-% % fprintf('[PLOT] Visualizing triangulated landmarks vs ground truth...\n');
-% % visualize_landmarks(landmarks_init, data);
-
-% % --- Filter triangulated landmarks using GT ---
-% % max_error = 0.5;  % adjust as needed
-% % landmarks_init = filter_landmarks(landmarks_init, data.world, max_error);
-
-% % landmarks_init = filter_by_reprojection_error(landmarks_init, data, 100);
-
-
-% %% --- Evaluate triangulated map -----------------------------------------
-% % fprintf('[INFO] Evaluating initial map...\n');
-% % rmse_map = evaluate_map(landmarks_init, data.world);
-% % fprintf('[INFO] RMSE of initial map: %.4f\n', rmse_map);
-
-
-% % Select and triangulate only first 5 landmark IDs
-% landmark_ids = sort(cell2mat(keys(data.measurements)));
-% selected_ids = landmark_ids(1:5);
-% [landmarks_init, id_map] = triangulate_simple(data);
-% % fprintf('[VISUAL] Plotting selected landmarks, GT, and observing poses...\n');
-% fprintf('[PLOT] Visualizing triangulated landmarks vs ground truth...\n');
-% visualize_landmarks(landmarks_init, data);
-
-% % % Prepare figure
-% % figure; hold on; grid on;
-% % title('Triangulated Landmarks, GT Positions, and Observing Poses');
-% % xlabel('X'); ylabel('Y'); zlabel('Z');
-% % axis equal;
-
-% % % --- Plot all robot poses (trajectory) ---
-% % plot3(data.trajectory(:,2), data.trajectory(:,3), zeros(size(data.trajectory,1),1), 'k--', 'DisplayName', 'Odometry');
-
-% % % --- Plot poses that observed each landmark ---
-% % colors = lines(length(landmarks_init));
-% % for i = 1:length(landmarks_init)
-% %     lm = landmarks_init(i);
-% %     if ~isKey(data.measurements, lm.id), continue; end
-
-% %     % Observing pose indices
-% %     obs = data.measurements(lm.id);  % [pose_idx, u, v]
-% %     pose_ids = unique(obs(:,1)) + 1;  % 1-based
-
-% %     % Plot each observing pose
-% %     pose_xyz = data.trajectory(pose_ids, 2:4);  % X, Y, theta
-% %     scatter3(pose_xyz(:,1), pose_xyz(:,2), zeros(size(pose_ids)), 40, colors(i,:), 'filled', ...
-% %         'DisplayName', sprintf('Poses for LM %d', lm.id));
-% % end
-
-% % % --- Plot triangulated landmark positions ---
-% % for i = 1:length(landmarks_init)
-% %     plot3(landmarks_init(i).pos(1), landmarks_init(i).pos(2), landmarks_init(i).pos(3), ...
-% %         'o', 'MarkerEdgeColor', colors(i,:), 'MarkerFaceColor', colors(i,:), 'DisplayName', sprintf('LM %d (est)', landmarks_init(i).id));
-% % end
-
-% % % --- Plot ground truth landmark positions ---
-% % for i = 1:length(landmarks_init)
-% %     gt_row = data.world(data.world(:,1) == landmarks_init(i).id, :);
-% %     if isempty(gt_row), continue; end
-% %     plot3(gt_row(2), gt_row(3), gt_row(4), 'x', 'Color', colors(i,:), 'LineWidth', 2, ...
-% %         'DisplayName', sprintf('LM %d (GT)', landmarks_init(i).id));
-% % end
-
-% % legend show;
-% % pause;
-% % fprintf('[INFO] Triangulating initial 3D points...\n');
-% % [landmarks_init2] = triangulate_simple(data);
-% % fprintf('[PLOT] Visualizing triangulated landmarks vs ground truth...\n');
-% % visualize_landmarks(landmarks_init2, data);
-
-
-% % landmarks_init = struct array: id, position (3x1), observations, etc.
-% % figure; hold on; grid on;
-% % for i = 1:size(data.trajectory,1)
-% %     T = se2_to_SE3(data.trajectory(i, 2:4)) * data.camera.cam_transform;
-% %     cam_pos = T(1:3,4);
-% %     plot3(cam_pos(1), cam_pos(2), cam_pos(3), 'bo');
-% % end
-% % title('Camera Positions'); xlabel('X'); ylabel('Y'); zlabel('Z'); axis equal;
-
-% %% --- (Optional) Visualize initial map -----------------------------------
-% % fprintf('[PLOT] Visualizing triangulated landmarks vs ground truth...\n');
-% % visualize_landmarks(landmarks_init, data);
-
-% %% --- Prepare for Bundle Adjustment -------------------------------------
-% fprintf('[INFO] Preparing for Bundle Adjustment...\n');
-
-% % 1. Convert odometry to SE(3) pose guesses
-% num_poses = size(data.trajectory, 1);
-% XR_guess = zeros(4,4,num_poses);
-% for i = 1:num_poses
-%     XR_guess(:,:,i) = se2_to_SE3(data.trajectory(i,2:4));  % odometry
-% end
-
-% % 2. Sort triangulated landmarks by ID
-% all_ids = [landmarks_init.id];
-% [~, order] = sort(all_ids);
-% landmarks_sorted = landmarks_init(order);  % sorted by ID
-
-% % 3. Convert measurements Map → per-frame array
-% frame_measurements = cell(num_poses, 1);
-% for lid = keys(data.measurements)
-%     landmark_id = lid{1};
-%     obs_list = data.measurements(landmark_id);  % [pose_idx, u, v]
-
-%     for i = 1:size(obs_list,1)
-%         pose_idx = obs_list(i,1) + 1;  % 1-based indexing
-%         u = obs_list(i,2);
-%         v = obs_list(i,3);
-%         row = [i, landmark_id, u, v];  % [obs_id, lm_id, u, v]
-%         frame_measurements{pose_idx} = [frame_measurements{pose_idx}; row];
-%     end
-% end
-
-% % 4. Build associations only for landmarks actually triangulated
-% id_to_index = containers.Map('KeyType', 'int32', 'ValueType', 'int32');
-% for i = 1:length(landmarks_sorted)
-%     id_to_index(landmarks_sorted(i).id) = i;
-% end
-
-% Zp = [];
-% projection_associations = [];
-% used_index_set = [];
-
-% for t = 1:num_poses
-%     frame_obs = frame_measurements{t};  % [pt_id, lm_id, u, v]
-%     for i = 1:size(frame_obs,1)
-%         lm_id = frame_obs(i,2);
-%         if isKey(id_to_index, lm_id)
-%             pos = id_to_index(lm_id);  % index into landmarks_sorted
-%             uv = frame_obs(i,3:4)';
-%             Zp = [Zp, uv];
-%             projection_associations = [projection_associations, [t; pos]];
-%             used_index_set = [used_index_set, pos];
-%         end
-%     end
-% end
-
-% Zp = [];
-% projection_associations = [];
-
-% for t = 1:num_poses
-%     obs = data.measurements{t};  % [pt_id, landmark_id, u, v]
-%     for i = 1:size(obs,1)
-%         lm_id = obs(i,2);
-%         if isKey(id_map, lm_id)
-%             u = obs(i,3);
-%             v = obs(i,4);
-%             col = id_map(lm_id);
-%             Zp = [Zp, [u; v]];
-%             projection_associations = [projection_associations, [t; col]];
-%         end
-%     end
-% end
-
-
-% % 5. Keep only used landmarks
-% used_ids = unique(used_index_set);
-% num_used_landmarks = length(used_ids);
-
-% % 6. Create remapping from old index → new compact index
-% id_map = containers.Map('KeyType', 'int32', 'ValueType', 'int32');
-% for new_idx = 1:num_used_landmarks
-%     old_idx = used_ids(new_idx);
-%     id_map(old_idx) = new_idx;
-% end
-
-% % 7. Filter and rebuild XL_guess
-% XL_guess = zeros(3, num_used_landmarks);
-% for i = 1:num_used_landmarks
-%     XL_guess(:, i) = landmarks_sorted(used_ids(i)).pos;
-% end
-
-% % 8. Remap projection associations to compact indices
-% for i = 1:size(projection_associations, 2)
-%     old = projection_associations(2,i);
-%     projection_associations(2,i) = id_map(old);
-% end
-
-% % 9. Build odometry edge constraints
-% Zr = zeros(4,4,num_poses-1);
-% pose_associations = zeros(2, num_poses-1);
-% for i = 1:(num_poses-1)
-%     T_i = XR_guess(:,:,i);
-%     T_j = XR_guess(:,:,i+1);
-%     Zr(:,:,i) = inv(T_i) * T_j;
-%     pose_associations(:,i) = [i; i+1];
-% end
-
-% % 10. Not using Zl data
-% Zl = zeros(3,0);
-% landmark_associations = zeros(2,0);
-
-% % 11. Update number of landmarks
-% num_landmarks = num_used_landmarks;
-
-
-% %% --- Pose Graph Optimization (Bundle Adjustment) ------------------------
-% fprintf('[INFO] Running Bundle Adjustment...\n');
-% % [optimized_poses, optimized_landmarks] = pose_graph_optimization(data, landmarks_init);
-
-% damping = 0;
-% kernel_threshold = 1e3;
-% num_iterations = 10;
-
-% % Convert to double for optimization
-% Zp = double(Zp);
-% projection_associations = double(projection_associations);
-% Zr = double(Zr);
-% pose_associations = double(pose_associations);
-
-% assert(all(pose_associations(:) >= 1), 'pose_associations contains zero or negative indices!');
-
-
-% [XR, XL, chi_l, inliers_l, chi_p, inliers_p, chi_r, inliers_r, H, b] = ...
-%     doTotalLS(XR_guess, XL_guess, ...
-%               Zl, landmark_associations, ...
-%               Zp, projection_associations, ...
-%               Zr, pose_associations, ...
-%               num_poses, num_landmarks, ...
-%               num_iterations, damping, kernel_threshold);
-
-
-
-
-% %% --- Evaluate results ---------------------------------------------------
-% fprintf('[INFO] Evaluating results...\n');
-
-% % evaluate_trajectory(data.trajectory, optimized_poses);
-% % evaluate_map(optimized_landmarks, data.world);
-
-% fprintf('[DONE] SLAM pipeline finished.\n');
-
-
-
-
-
-
-
-
-% =========================================================================
-% MAIN.M - Planar Monocular SLAM 
-% =========================================================================
 
 addpath('utils');
 source "utils/total_least_squares.m"
@@ -318,16 +59,16 @@ for lm_idx = 1:num_landmarks
 end
 
 % === Report Results ===
-% fprintf("\n[RESULTS] Triangulated Landmarks — Reprojection Error:\n");
-% for i = 1:num_landmarks
-%     errs = errors_per_landmark{i};
-%     if ~isempty(errs)
-%         fprintf("LM %3d — Mean: %6.2f px | Obs: %2d\n", i, mean(errs), length(errs));
-%     else
-%         fprintf("LM %3d — No valid projections\n", i);
-%     end
-% end
-% fprintf("\n[INFO] Done evaluating triangulated landmarks.\n");
+fprintf("\n[RESULTS] Triangulated Landmarks — Reprojection Error:\n");
+for i = 1:num_landmarks
+    errs = errors_per_landmark{i};
+    if ~isempty(errs)
+        fprintf("LM %3d — Mean: %6.2f px | Obs: %2d\n", i, mean(errs), length(errs));
+    else
+        fprintf("LM %3d — No valid projections\n", i);
+    end
+end
+fprintf("\n[INFO] Done evaluating triangulated landmarks.\n");
 
 % pause;
 
@@ -409,8 +150,7 @@ for k = 1:size(Zp, 2)
     end
 end
 
-% Filter by reprojection error?
-Print average reprojection error for each landmark
+% Print average reprojection error for each landmark
 fprintf("\nAverage reprojection error per landmark:\n");
 for i = 1:num_landmarks
     errs = errors_per_landmark{i};
@@ -421,7 +161,6 @@ for i = 1:num_landmarks
         fprintf("Landmark %d: no valid projections\n", i);
     end
 end
-pause;
 
 
 
@@ -431,7 +170,7 @@ damping = 1e-4;
 kernel_threshold_proj = 5000;
 kernel_threshold_pose = 0.01;
 kernel_threshold = 0.01;
-num_iterations = 5;
+num_iterations = 10;
 
 % Zp = double(Zp);
 % projection_associations = double(projection_associations);
@@ -518,4 +257,5 @@ plot(traj_estimated(1,:), traj_estimated(2,:), 'rx', 'MarkerSize', 3);
 axis equal; grid on;
 title('Trajectory ground truth and optimization');
 fprintf('[DEBUG] Press any key to continue...\n');
+
 pause;

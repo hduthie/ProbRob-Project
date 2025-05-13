@@ -182,73 +182,17 @@ function [XR, XL, chi_stats_l, num_inliers_l, ...
     end
   end
 
-  % % --- Final chi squared plots ---
-  % figure('Name', 'BA Optimization Stats', 'NumberTitle', 'off');
-  % set(gcf, 'Position', [100, 100, 1000, 400]);
+  % --- Final chi squared plots ---
+  figure('Name', 'BA Optimization Stats', 'NumberTitle', 'off');
+  set(gcf, 'Position', [100, 100, 1000, 400]);
 
-  % subplot(1,2,1); hold on; grid on;
-  % plot(chi_stats_l + chi_stats_p + chi_stats_r, 'b-', 'LineWidth', 2, 'DisplayName', 'Total χ²');
-  % plot(chi_stats_r, 'r--', 'LineWidth', 1.5, 'DisplayName', 'Pose χ²');
-  % plot(chi_stats_p, 'g:', 'LineWidth', 1.5, 'DisplayName', 'Proj. χ²');
-  % title('χ² over Iterations'); xlabel('Iteration'); ylabel('χ²'); legend('show');
+  subplot(1,2,1); hold on; grid on;
+  plot(chi_stats_l + chi_stats_p + chi_stats_r, 'b-', 'LineWidth', 2, 'DisplayName', 'Total χ²');
+  plot(chi_stats_r, 'r--', 'LineWidth', 1.5, 'DisplayName', 'Pose χ²');
+  plot(chi_stats_p, 'g:', 'LineWidth', 1.5, 'DisplayName', 'Proj. χ²');
+  title('χ² over Iterations'); xlabel('Iteration'); ylabel('χ²'); legend('show');
 
-  % subplot(1,2,2); hold on; grid on;
-  % plot(dx_norm, 'm-', 'LineWidth', 2);
-  % title('Step Norm ‖dx‖ over Iterations'); xlabel('Iteration'); ylabel('‖dx‖');
+  subplot(1,2,2); hold on; grid on;
+  plot(dx_norm, 'm-', 'LineWidth', 2);
+  title('Step Norm ‖dx‖ over Iterations'); xlabel('Iteration'); ylabel('‖dx‖');
 endfunction
-
-% function [XR, XL, chi_stats_p, num_inliers_p, chi_stats_r, num_inliers_r, H, b, iteration] = ...
-%     doTotalLS(XR, XL, Zp, projection_associations, Zr, pose_associations, ...
-%               num_poses, num_landmarks, num_iterations, damping, ...
-%               kernel_threshold_proj, kernel_threshold_pose)
-
-%   global pose_dim;
-%   global landmark_dim;
-
-%   system_size = pose_dim * num_poses + landmark_dim * num_landmarks;
-
-%   chi_stats_p = zeros(num_iterations, 1);
-%   num_inliers_p = zeros(num_iterations, 1);
-%   chi_stats_r = zeros(num_iterations, 1);
-%   num_inliers_r = zeros(num_iterations, 1);
-
-%   iteration = 1;
-%   error = 1e6;
-
-%   while iteration <= num_iterations && error > 1e-6
-%     printf("Iteration %d\n", iteration);
-
-%     % Projections
-%     [H_proj, b_proj, chi_p, inliers_p] = linearizeProjections(XR, XL, Zp, ...
-%         projection_associations, num_poses, num_landmarks, kernel_threshold_proj);
-%     chi_stats_p(iteration) = chi_p;
-%     num_inliers_p(iteration) = inliers_p;
-
-%     % Poses
-%     [H_pose, b_pose, chi_r, inliers_r] = linearizePoses(XR, Zr, ...
-%         pose_associations, num_poses, num_landmarks, kernel_threshold_pose);
-%     chi_stats_r(iteration) = chi_r;
-%     num_inliers_r(iteration) = inliers_r;
-
-%     % Construct system
-%     H = H_proj + H_pose;
-%     b = b_proj + b_pose;
-
-%     % Add damping
-%     H += eye(system_size) * damping;
-
-%     % Fix the first pose
-%     dx = zeros(system_size, 1);
-%     dx(pose_dim+1:end) = -H(pose_dim+1:end, pose_dim+1:end) \ b(pose_dim+1:end);
-
-%     % Apply update
-%     [XR, XL] = boxPlus(XR, XL, num_poses, num_landmarks, dx);
-
-%     error = sum(abs(dx));
-%     printf("Error: %.6f\n", error);
-%     iteration += 1;
-%   endwhile
-
-%   iteration -= 1;  % account for last increment
-% endfunction
-

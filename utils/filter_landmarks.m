@@ -1,4 +1,5 @@
 function landmarks_out = filter_landmarks(landmarks_in, world_gt, max_error)
+% NOT CURRENTLY USED
 % FILTER_LANDMARKS filters triangulated landmarks based on ground truth proximity
 %
 % Inputs:
