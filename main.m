@@ -318,21 +318,17 @@ for lm_idx = 1:num_landmarks
 end
 
 % === Report Results ===
-fprintf("\n[RESULTS] Triangulated Landmarks — Reprojection Error:\n");
-for i = 1:num_landmarks
-    errs = errors_per_landmark{i};
-    if ~isempty(errs)
-        fprintf("LM %3d — Mean: %6.2f px | Obs: %2d\n", i, mean(errs), length(errs));
-    else
-        fprintf("LM %3d — No valid projections\n", i);
-    end
-end
-fprintf("\n[INFO] Done evaluating triangulated landmarks.\n");
+% fprintf("\n[RESULTS] Triangulated Landmarks — Reprojection Error:\n");
+% for i = 1:num_landmarks
+%     errs = errors_per_landmark{i};
+%     if ~isempty(errs)
+%         fprintf("LM %3d — Mean: %6.2f px | Obs: %2d\n", i, mean(errs), length(errs));
+%     else
+%         fprintf("LM %3d — No valid projections\n", i);
+%     end
+% end
+% fprintf("\n[INFO] Done evaluating triangulated landmarks.\n");
 
-% pause;
-
-% Visualize reprojection of landmark 86 from pose 10
-% visualize_reprojection(XR_guess, XL_guess, Zp, projection_associations, 86, 10)
 % pause;
 
 
@@ -414,18 +410,18 @@ for k = 1:size(Zp, 2)
 end
 
 % Filter by reprojection error?
-% Print average reprojection error for each landmark
-% fprintf("\nAverage reprojection error per landmark:\n");
-% for i = 1:num_landmarks
-%     errs = errors_per_landmark{i};
-%     if ~isempty(errs)
-%         avg_err = mean(errs);
-%         fprintf("Landmark %d: %.2f pixels (from %d obs)\n", i, avg_err, length(errs));
-%     else
-%         fprintf("Landmark %d: no valid projections\n", i);
-%     end
-% end
-% pause;
+Print average reprojection error for each landmark
+fprintf("\nAverage reprojection error per landmark:\n");
+for i = 1:num_landmarks
+    errs = errors_per_landmark{i};
+    if ~isempty(errs)
+        avg_err = mean(errs);
+        fprintf("Landmark %d: %.2f pixels (from %d obs)\n", i, avg_err, length(errs));
+    else
+        fprintf("Landmark %d: no valid projections\n", i);
+    end
+end
+pause;
 
 
 
