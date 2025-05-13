@@ -6,13 +6,22 @@ This project implements a full SLAM pipeline using only a monocular camera and o
 - Pose graph and projection-based Bundle Adjustment (Total Least Squares)
 - Evaluation against ground truth for both trajectory and map
 
-## 🔧 Requirements
+## Requirements
 
 - Octave (tested on version ≥ 6)
 - Standard packages (no toolboxes required)
 
-## ▶️ Running the Code
+## Running the Code
 
 Run the main entry point:
 ```bash
 octave main.m
+
+## Note
+This is an attempt at implementing Planar Monocular SLAM from scratch which is currently **not successful**:
+
+Current problems:
+- Triangulated landmarks suffer from high reprojection error.
+- Bundle Adjustment (BA) diverges and unstable.
+- The trajectory estimate does not meaningfully improve over raw odometry.
+
